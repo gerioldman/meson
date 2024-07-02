@@ -361,7 +361,7 @@ class GnuLikeCompiler(Compiler, metaclass=abc.ABCMeta):
 
     def __init__(self) -> None:
         self.base_options = {
-            OptionKey(o) for o in ['b_pch', 'b_lto', 'b_pgo', 'b_coverage',
+            OptionKey(o) for o in ['b_pch', 'b_lto', 'b_pgo', 'b_coverage', 'b_ctc_coverage',
                                    'b_ndebug', 'b_staticpic', 'b_pie']}
         if not (self.info.is_windows() or self.info.is_cygwin() or self.info.is_openbsd()):
             self.base_options.add(OptionKey('b_lundef'))

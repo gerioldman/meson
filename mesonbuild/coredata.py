@@ -950,6 +950,8 @@ FORBIDDEN_TARGET_NAMES = frozenset({
     'clean-ctlist',
     'clean-gcno',
     'clean-gcda',
+    'clean-sym',
+    'ctc-coverage',
     'coverage',
     'coverage-text',
     'coverage-xml',

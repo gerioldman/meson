@@ -153,6 +153,24 @@ def find_coverage_tools(coredata: coredata.CoreData) -> T.Tuple[T.Optional[str],
 
     return gcovr_exe, gcovr_version, lcov_exe, lcov_version, genhtml_exe, llvm_cov_exe
 
+def find_ctc_coverage_tools() -> T.Tuple[T.Optional[str], T.Optional[str], T.Optional[str]]:
+    ctc = 'ctc'
+    ctc_version = None
+    ctc_path = None
+    try:
+        p, found = Popen_safe([ctc])[0:2]
+    except (FileNotFoundError, PermissionError):
+        # Doesn't exist in PATH or isn't executable
+        return None
+    if p.returncode != 0 or not found:
+        ctc = None
+    else:
+        ctc_version = search_version(found.strip())
+        prog = ExternalProgram(ctc, silent=True)
+        ctc_path = ' '.join([quote_arg(x) for x in prog.command])
+
+    return ctc, ctc_version, ctc_path
+    
 def detect_ninja(version: str = '1.8.2', log: bool = False) -> T.List[str]:
     r = detect_ninja_command_and_version(version, log)
     return r[0] if r else None
@@ -831,6 +849,9 @@ class Environment:
 
     def get_log_dir(self) -> str:
         return self.log_dir
+
+    def get_info_dir(self) -> str:
+        return self.info_dir
 
     def get_coredata(self) -> coredata.CoreData:
         return self.coredata
