@@ -239,6 +239,7 @@ BASE_OPTIONS: T.Mapping[OptionKey, BaseOption] = {
     OptionKey('b_pgo'): BaseOption(options.UserComboOption, 'Use profile guided optimization', 'off',
                                    choices=['off', 'generate', 'use']),
     OptionKey('b_coverage'): BaseOption(options.UserBooleanOption, 'Enable coverage tracking.', False),
+    OptionKey('b_ctc_coverage'): BaseOption(options.UserBooleanOption, 'Enable Testwell CTC++ coverage tracking.', False),
     OptionKey('b_colorout'): BaseOption(options.UserComboOption, 'Use colored output', 'always',
                                         choices=['auto', 'always', 'never']),
     OptionKey('b_ndebug'): BaseOption(options.UserComboOption, 'Disable asserts', 'false', choices=['true', 'false', 'if-release']),

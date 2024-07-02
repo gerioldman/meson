@@ -679,6 +679,17 @@ class NinjaBackend(backends.Backend):
                     # FIXME: since we explicitly opted in, should this be an error?
                     # The docs just say these targets will be created "if possible".
                     mlog.warning('Need gcovr or lcov/genhtml to generate any coverage reports')
+            key = OptionKey('b_ctc_coverage')
+            if (key in self.environment.coredata.optstore and self.environment.coredata.optstore.get_value(key)):
+                ctc, ctc_version, ctc_path = environment.find_ctc_coverage_tools()
+                if ctc is None:
+                    raise MesonException('Could not detect Testwell CTC++ executable')
+                else:
+                    mlog.log(f'Found Testwell CTC++ {ctc_version} for code coverage at {ctc_path}')
+                self.add_build_comment(NinjaComment('Testwell CTC++ Coverage rules'))
+                self.generate_ctc_coverage_rules()
+                mlog.log_timestamp("Testwell CTC++ Coverage rules generated")
+
             self.add_build_comment(NinjaComment('Suffix'))
             self.generate_utils()
             mlog.log_timestamp("Utils generated")
@@ -735,6 +746,15 @@ class NinjaBackend(backends.Backend):
                     rule = self.get_compiler_rule_name('tasking_mil_compile', compiler.for_machine)
                     rules.append(rule)
                     rules.append(f'{rule}_RSP')
+                # Add custom Testwell CTC++ rules included in the database
+                key = OptionKey('b_ctc_coverage')
+                if key in compiler.base_options:
+                    rule = self.compiler_to_rule_name(compiler)
+                    rules.append(f'{rule}_CTC')
+                    rules.append(f'{rule}_CTC_RSP')
+                    rule = self.compiler_to_pch_rule_name(compiler)
+                    rules.append(f'{rule}_CTC')
+                    rules.append(f'{rule}_CTC_RSP')
         compdb_options = ['-x'] if mesonlib.version_compare(self.ninja_version, '>=1.9') else []
         ninja_compdb = self.ninja_command + ['-t', 'compdb'] + compdb_options + rules
         builddir = self.environment.get_build_dir()
@@ -1302,6 +1322,15 @@ class NinjaBackend(backends.Backend):
         e.add_item('description', 'Generates coverage reports')
         self.add_build(e)
         self.generate_coverage_legacy_rules(gcovr_exe, gcovr_version, llvm_cov_exe)
+
+    def generate_ctc_coverage_rules(self):
+        e = self.create_phony_target('ctc_coverage','CUSTOM_COMMAND', 'PHONY')
+        e.add_item('COMMAND', self.environment.get_build_command() + ['--internal', 'ctc_coverage'] +
+        [   self.environment.get_source_dir(), os.path.join(self.environment.get_source_dir(), self.build.get_subproject_dir()),
+            self.environment.get_build_dir(), self.environment.get_log_dir(), self.environment.get_info_dir()])
+        e.add_item('DESC', 'Generate Testwell CTC++ coverage reports')
+        e.add_item('pool', 'console')
+        self.add_build(e) 
 
     def generate_coverage_legacy_rules(self, gcovr_exe: T.Optional[str], gcovr_version: T.Optional[str], llvm_cov_exe: T.Optional[str]) -> None:
         e = self.create_phony_target('coverage-html', 'CUSTOM_COMMAND', 'PHONY')
@@ -2370,13 +2399,22 @@ class NinjaBackend(backends.Backend):
 
     def generate_dynamic_link_rules(self) -> None:
         num_pools = self.environment.coredata.optstore.get_value('backend_max_links')
+        ctc_ini_found = os.path.exists(os.path.join(self.source_dir, 'ctc.ini'))
         for for_machine in MachineChoice:
             complist = self.environment.coredata.compilers[for_machine]
             for langname, compiler in complist.items():
                 if langname in {'java', 'vala', 'rust', 'cs', 'cython'}:
                     continue
                 rule = '{}_LINKER{}'.format(langname, self.get_rule_suffix(for_machine))
+                ctc_rule = '{}_LINKER{}_CTC'.format(langname, self.get_rule_suffix(for_machine))
                 command = compiler.get_linker_exelist()
+                # Testwell CTC++ rule if required
+                ctc_commmand = None
+                if OptionKey('b_ctc_coverage') in compiler.base_options:
+                    if ctc_ini_found:
+                        ctc_command = ['ctc', '-i', 'm'] + ['-c'] + [os.path.join(self.source_dir, 'ctc.ini')] + ['-n', '$SYMFILE'] + compiler.get_linker_exelist()
+                    else:
+                        ctc_command = ['ctc', '-i', 'm'] + compiler.get_linker_exelist()
                 args = ['$ARGS'] + NinjaCommandArg.list(compiler.get_linker_output_args('$out'), Quoting.none) + ['$in', '$LINK_ARGS']
                 description = 'Linking target $out'
                 if num_pools > 0:
@@ -2386,6 +2424,8 @@ class NinjaBackend(backends.Backend):
 
                 options = self._rsp_options(compiler)
                 self.add_rule(NinjaRule(rule, command, args, description, **options, extra=pool))
+                if ctc_command is not None:
+                    self.add_rule(NinjaRule(ctc_rule, ctc_command, args, description, **options, extra=pool))
             if self.environment.machines[for_machine].is_aix():
                 rule = 'AIX_LINKER{}'.format(self.get_rule_suffix(for_machine))
                 description = 'Archiving AIX shared library'
@@ -2552,12 +2592,20 @@ https://gcc.gnu.org/bugzilla/show_bug.cgi?id=47485'''))
             # See also: https://github.com/ninja-build/ninja/pull/2275
             options['extra'] = 'restat = 1'
         rule = self.compiler_to_rule_name(compiler)
+        ctc_rule = rule + '_CTC'
         if langname == 'cuda':
             # for cuda, we manually escape target name ($out) as $CUDA_ESCAPED_TARGET because nvcc doesn't support `-MQ` flag
             depargs = NinjaCommandArg.list(compiler.get_dependency_gen_args('$CUDA_ESCAPED_TARGET', '$DEPFILE'), Quoting.none)
         else:
             depargs = NinjaCommandArg.list(compiler.get_dependency_gen_args('$out', '$DEPFILE'), Quoting.none)
         command = compiler.get_exelist()
+        # Testwell CTC++ rules if needed
+        ctc_command = None
+        if OptionKey('b_ctc_coverage') in compiler.base_options:
+            if os.path.exists(os.path.join(self.source_dir, 'ctc.ini')):
+                ctc_command = ['ctc', '-i', 'm'] + ['-c'] + [os.path.join(self.source_dir, 'ctc.ini')] + ['-n', '$SYMFILE'] + compiler.get_exelist()
+            else:
+                ctc_command = ['ctc', '-i', 'm'] + compiler.get_exelist()
         args = ['$ARGS'] + depargs + NinjaCommandArg.list(compiler.get_output_args('$out'), Quoting.none) + compiler.get_compile_only_args() + ['$in']
         description = f'Compiling {compiler.get_display_language()} object $out'
         if compiler.get_argument_syntax() == 'msvc':
@@ -2568,6 +2616,9 @@ https://gcc.gnu.org/bugzilla/show_bug.cgi?id=47485'''))
             depfile = '$DEPFILE'
         self.add_rule(NinjaRule(rule, command, args, description, **options,
                                 deps=deps, depfile=depfile))
+        if ctc_command is not None:
+            self.add_rule(NinjaRule(ctc_rule, ctc_command, args, description, **options,
+                        deps=deps, depfile=depfile))
 
     def generate_pch_rule_for(self, langname: str, compiler: Compiler) -> None:
         if langname not in {'c', 'cpp'}:
@@ -3091,6 +3142,11 @@ https://gcc.gnu.org/bugzilla/show_bug.cgi?id=47485'''))
             compiler_name = self.get_compiler_rule_name('tasking_mil_compile', compiler.for_machine)
         else:
             compiler_name = self.compiler_to_rule_name(compiler)
+
+        if OptionKey('b_ctc_coverage') in compiler.base_options:
+            if target.get_option(OptionKey('b_ctc_coverage')):
+                compiler_name = compiler_name + '_CTC'
+        
         extra_deps = []
         if compiler.get_language() == 'fortran':
             # Can't read source file to scan for deps if it's generated later
@@ -3156,6 +3212,10 @@ https://gcc.gnu.org/bugzilla/show_bug.cgi?id=47485'''))
                 return result
             element.add_item('CUDA_ESCAPED_TARGET', quote_make_target(rel_obj))
         element.add_item('ARGS', commands)
+
+        if OptionKey('b_ctc_coverage') in compiler.base_options:
+            if target.get_option(OptionKey('b_ctc_coverage')):
+                element.add_item('SYMFILE', [self.get_target_filename(target) + '.sym'])
 
         self.add_dependency_scanner_entries_to_element(target, compiler, element, src)
         self.add_build(element)
@@ -3510,6 +3570,7 @@ https://gcc.gnu.org/bugzilla/show_bug.cgi?id=47485'''))
             self.generate_shsym(target)
         crstr = self.get_rule_suffix(target.for_machine)
         linker_rule = linker_base + '_LINKER' + crstr
+        ctc_linker_rule = linker_rule + '_CTC'
         # Create an empty commands list, and start adding link arguments from
         # various sources in the order in which they must override each other
         # starting from hard-coded defaults followed by build options and so on.
@@ -3639,9 +3700,20 @@ https://gcc.gnu.org/bugzilla/show_bug.cgi?id=47485'''))
         dep_targets.extend([self.get_dependency_filename(t) for t in dependencies])
         dep_targets.extend([self.get_dependency_filename(t)
                             for t in target.link_depends])
-        elem = NinjaBuildElement(self.all_outputs, outname, linker_rule, obj_list, implicit_outs=implicit_outs)
+        try:
+            # There is no safe way of checking for this, if the options doesn't exist for the target, this throws an expection 
+            ctc_option = OptionKey('b_ctc_coverage') in target.compilers['c'].base_options and target.get_option(OptionKey('b_ctc_coverage'))
+        except:
+            ctc_option = False
+        
+        if ctc_option and not isinstance(target, build.StaticLibrary):
+            elem = NinjaBuildElement(self.all_outputs, outname, ctc_linker_rule, obj_list, implicit_outs=implicit_outs)
+            elem.add_item('SYMFILE', [self.get_target_filename(target) + '.sym'])
+        else:
+            elem = NinjaBuildElement(self.all_outputs, outname, linker_rule, obj_list, implicit_outs=implicit_outs)
         elem.add_dep(dep_targets + custom_target_libraries)
         elem.add_item('LINK_ARGS', commands)
+
         self.create_target_linker_introspection(target, linker, commands)
         return elem
 
@@ -3695,6 +3767,12 @@ https://gcc.gnu.org/bugzilla/show_bug.cgi?id=47485'''))
         gcda_elem.add_item('COMMAND', mesonlib.get_meson_command() + ['--internal', 'delwithsuffix', '.', 'gcda'])
         gcda_elem.add_item('description', 'Deleting gcda files')
         self.add_build(gcda_elem)
+
+    def generate_ctc_coverage_clean(self) -> None:
+        sym_elem = self.create_phony_target('clean-sym', 'CUSTOM_COMMAND', 'PHONY')
+        sym_elem.add_item('COMMAND', mesonlib.get_meson_command() + ['--internal', 'delwithsuffix', '.', 'sym'])
+        sym_elem.add_item('description', 'Deleting sym files')
+        self.add_build(sym_elem)
 
     def get_user_option_args(self) -> T.List[str]:
         cmds = []
@@ -3832,6 +3910,11 @@ https://gcc.gnu.org/bugzilla/show_bug.cgi?id=47485'''))
             self.generate_gcov_clean()
             elem.add_dep('clean-gcda')
             elem.add_dep('clean-gcno')
+        key = OptionKey('b_ctc_coverage')
+        if key in self.environment.coredata.optstore and self.environment.coredata.optstore.get_value(key):
+            self.generate_ctc_coverage_clean()
+            elem.add_dep('clean-sym')
+
         self.add_build(elem)
 
         deps = self.get_regen_filelist()
