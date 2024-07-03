@@ -70,7 +70,7 @@ def ctc_coverage(source_root: str, subproject_root: str, build_root: str, log_di
     outfiles = []
     exitcode = 0
 
-    ctc, ctc_version = environment.find_ctc_coverage_tools()
+    ctc, ctc_version, ctc_path = environment.find_ctc_coverage_tools()
     if ctc is None:
         exitcode = 1
     else:

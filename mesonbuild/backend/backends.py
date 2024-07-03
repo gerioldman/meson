@@ -823,8 +823,13 @@ class Backend:
     def canonicalize_filename(fname: str) -> str:
         parts = Path(fname).parts
         hashed = ''
-        if len(parts) > 5:
-            temp = '/'.join(parts[-5:])
+        part_treshold = os.getenv('MESON_FILENAME_TRESHOLD')
+        if part_treshold is None:
+            part_treshold = 5
+        else:
+            part_treshold = int(part_treshold)
+        if len(parts) > part_treshold:
+            temp = '/'.join(parts[-part_treshold:])
             # is it shorter to hash the beginning of the path?
             if len(fname) > len(temp) + 41:
                 hashed = hashlib.sha1(fname.encode('utf-8')).hexdigest() + '_'

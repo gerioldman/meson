@@ -2400,7 +2400,7 @@ class NinjaBackend(backends.Backend):
                 ctc_rule = '{}_LINKER{}_CTC'.format(langname, self.get_rule_suffix(for_machine))
                 command = compiler.get_linker_exelist()
                 # Testwell CTC++ rule if required
-                ctc_commmand = None
+                ctc_command = None
                 if OptionKey('b_ctc_coverage') in compiler.base_options:
                     if ctc_ini_found:
                         ctc_command = ['ctc', '-i', 'm'] + ['-c'] + [os.path.join(self.source_dir, 'ctc.ini')] + ['-n', '$SYMFILE'] + compiler.get_linker_exelist()
