@@ -52,7 +52,7 @@ class ClangCompiler(GnuLikeCompiler):
         self.defines = defines or {}
         self.base_options.update(
             {OptionKey('b_colorout'), OptionKey('b_lto_threads'), OptionKey('b_lto_mode'), OptionKey('b_thinlto_cache'),
-             OptionKey('b_thinlto_cache_dir')})
+             OptionKey('b_thinlto_cache_dir'), OptionKey('b_clang_mcdc_coverage')})
 
         # TODO: this really should be part of the linker base_options, but
         # linkers don't have base_options.
@@ -204,3 +204,9 @@ class ClangCompiler(GnuLikeCompiler):
                 raise mesonlib.MesonException('clang support for LTO threads requires clang >=4.0')
             args.append(f'-flto-jobs={threads}')
         return args
+
+    def get_mcdc_coverage_args(self, exe_path: str):
+        if not mesonlib.version_compare(self.version, '>=19.0.0'):
+            raise mesonlib.MesonException('clang support for LTO threads requires clang >=4.0')
+        else:
+            return [f'-fprofile-instr-generate={exe_path}.profraw', '-fcoverage-mapping', '-fcoverage-mcdc']

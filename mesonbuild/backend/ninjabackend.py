@@ -690,6 +690,12 @@ class NinjaBackend(backends.Backend):
                 self.generate_ctc_coverage_rules()
                 mlog.log_timestamp("Testwell CTC++ Coverage rules generated")
 
+            key = OptionKey('b_clang_mcdc_coverage')
+            if (key in self.environment.coredata.optstore and self.environment.coredata.optstore.get_value(key)):
+                self.add_build_comment(NinjaComment('Clang MC/DC Coverage rules'))
+                self.generate_mcdc_coverage_rules()
+                mlog.log_timestamp("Clang MC/DC Coverage rules generated")
+
             self.add_build_comment(NinjaComment('Suffix'))
             self.generate_utils()
             mlog.log_timestamp("Utils generated")
@@ -1330,7 +1336,17 @@ class NinjaBackend(backends.Backend):
             self.environment.get_build_dir(), self.environment.get_log_dir(), self.environment.get_info_dir()])
         e.add_item('DESC', 'Generate Testwell CTC++ coverage reports')
         e.add_item('pool', 'console')
-        self.add_build(e) 
+        self.add_build(e)
+
+    def generate_mcdc_coverage_rules(self):
+        e = self.create_phony_target('clang_mcdc_coverage','CUSTOM_COMMAND', 'PHONY')
+
+        e.add_item('COMMAND', self.environment.get_build_command() + ['--internal', 'clang_mcdc_coverage'] +
+        [   self.environment.get_source_dir(), os.path.join(self.environment.get_source_dir(), self.build.get_subproject_dir()),
+            self.environment.get_build_dir(), self.environment.get_log_dir(), self.environment.get_info_dir(), self.environment.coredata.get_option(OptionKey('clang_mcdc_filter'))])
+        e.add_item('DESC', 'Generate Clang MC/DC coverage reports')
+        e.add_item('pool', 'console')
+        self.add_build(e)
 
     def generate_coverage_legacy_rules(self, gcovr_exe: T.Optional[str], gcovr_version: T.Optional[str], llvm_cov_exe: T.Optional[str]) -> None:
         e = self.create_phony_target('coverage-html', 'CUSTOM_COMMAND', 'PHONY')
@@ -3143,6 +3159,12 @@ https://gcc.gnu.org/bugzilla/show_bug.cgi?id=47485'''))
         else:
             compiler_name = self.compiler_to_rule_name(compiler)
 
+        key = OptionKey('b_clang_mcdc_coverage')
+        # Add Clang MC/DC coverage instrumentation args if the option is enabled
+        # Only add args if compiled into executable
+        if key in compiler.base_options and target.get_option(key) and isinstance(target, build.Executable):
+            commands +=  compiler.get_mcdc_coverage_args(target.get_path())
+
         if OptionKey('b_ctc_coverage') in compiler.base_options:
             if target.get_option(OptionKey('b_ctc_coverage')):
                 compiler_name = compiler_name + '_CTC'
@@ -3593,6 +3615,9 @@ https://gcc.gnu.org/bugzilla/show_bug.cgi?id=47485'''))
         # Add --mil-link if the option is enabled
         if isinstance(target, build.Executable) and 'c' in target.compilers and OptionKey('b_tasking_mil_link') in target.get_options():
             commands += target.compilers['c'].get_tasking_mil_link_args(target.get_option(OptionKey('b_tasking_mil_link')))
+        # Add Clang MC/DC coverage instrumentation args if the option is enabled
+        if OptionKey('b_clang_mcdc_coverage') in target.get_options() and target.get_option(OptionKey('b_clang_mcdc_coverage')) and isinstance(linker, Compiler):
+            commands +=  linker.get_mcdc_coverage_args(outname)
         # Add -nostdlib if needed; can't be overridden
         commands += self.get_no_stdlib_link_args(target, linker)
         # Add things like /NOLOGO; usually can't be overridden
@@ -3774,6 +3799,17 @@ https://gcc.gnu.org/bugzilla/show_bug.cgi?id=47485'''))
         sym_elem.add_item('description', 'Deleting sym files')
         self.add_build(sym_elem)
 
+    def generate_clang_coverage_clean(self) -> None:
+        profraw_elem = self.create_phony_target('clean-profraw', 'CUSTOM_COMMAND', 'PHONY')
+        profraw_elem.add_item('COMMAND', mesonlib.get_meson_command() + ['--internal', 'delwithsuffix', '.', 'profraw'])
+        profraw_elem.add_item('description', 'Deleting profraw files')
+        self.add_build(profraw_elem)
+
+        profdata_elem = self.create_phony_target('clean-profdata', 'CUSTOM_COMMAND', 'PHONY')
+        profdata_elem.add_item('COMMAND', mesonlib.get_meson_command() + ['--internal', 'delwithsuffix', '.', 'profdata'])
+        profdata_elem.add_item('description', 'Deleting profdata files')
+        self.add_build(profdata_elem)
+
     def get_user_option_args(self) -> T.List[str]:
         cmds = []
         for k, v in self.environment.coredata.optstore.items():
@@ -3914,6 +3950,11 @@ https://gcc.gnu.org/bugzilla/show_bug.cgi?id=47485'''))
         if key in self.environment.coredata.optstore and self.environment.coredata.optstore.get_value(key):
             self.generate_ctc_coverage_clean()
             elem.add_dep('clean-sym')
+        key = OptionKey('b_clang_mcdc_coverage')
+        if key in self.environment.coredata.optstore and self.environment.coredata.optstore.get_value(key):
+            self.generate_clang_coverage_clean()
+            elem.add_dep('clean-profraw')
+            elem.add_dep('clean-profdata')
 
         self.add_build(elem)
 

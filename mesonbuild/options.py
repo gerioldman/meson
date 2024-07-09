@@ -636,6 +636,8 @@ BUILTIN_CORE_OPTIONS: T.Dict['OptionKey', 'BuiltinOption'] = OrderedDict([
     (OptionKey('wrap_mode'),       BuiltinOption(UserComboOption, 'Wrap mode', 'default', choices=['default', 'nofallback', 'nodownload', 'forcefallback', 'nopromote'])),
     (OptionKey('force_fallback_for'), BuiltinOption(UserArrayOption, 'Force fallback for those subprojects', [])),
     (OptionKey('vsenv'),           BuiltinOption(UserBooleanOption, 'Activate Visual Studio environment', False, readonly=True)),
+    # Clang MCDC coverage filter used for generating 
+    (OptionKey('clang_mcdc_filter'),    BuiltinOption(UserStringOption, 'Clang MC/DC coverage generation filter regex', '')),
 
     # Pkgconfig module
     (OptionKey('pkgconfig.relocatable'),

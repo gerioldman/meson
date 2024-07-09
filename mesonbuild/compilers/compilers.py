@@ -240,6 +240,7 @@ BASE_OPTIONS: T.Mapping[OptionKey, BaseOption] = {
                                    choices=['off', 'generate', 'use']),
     OptionKey('b_coverage'): BaseOption(options.UserBooleanOption, 'Enable coverage tracking.', False),
     OptionKey('b_ctc_coverage'): BaseOption(options.UserBooleanOption, 'Enable Testwell CTC++ coverage tracking.', False),
+    OptionKey('b_clang_mcdc_coverage'): BaseOption(options.UserBooleanOption, 'Enable Clang MC/DC coverage tracking (available since version 19).', False),
     OptionKey('b_colorout'): BaseOption(options.UserComboOption, 'Use colored output', 'always',
                                         choices=['auto', 'always', 'never']),
     OptionKey('b_ndebug'): BaseOption(options.UserComboOption, 'Disable asserts', 'false', choices=['true', 'false', 'if-release']),
@@ -1356,6 +1357,12 @@ class Compiler(HoldableObject, metaclass=abc.ABCMeta):
         """
         Argument for enabling TASKING's MIL link feature,
         for most compilers, this will return nothing.
+        """
+        return []
+    
+    def get_mcdc_coverage_args(self, exe_path: str):
+        """
+        Arguments for compiling with clang's MCDC coverage tracking.
         """
         return []
 
