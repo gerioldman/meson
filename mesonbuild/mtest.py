@@ -154,6 +154,8 @@ def add_arguments(parser: argparse.ArgumentParser) -> None:
                         help='Do not redirect stdout and stderr')
     parser.add_argument('-q', '--quiet', default=False, action='store_true',
                         help='Produce less output to the terminal.')
+    parser.add_argument('--allow-no-match', default=False, action='store_true',
+                        help='Allow wildcards to match no tests without error.')
     parser.add_argument('-t', '--timeout-multiplier', type=float, default=None,
                         help='Define a multiplier for test timeout, for example '
                         ' when running tests in particular conditions they might take'
@@ -1945,11 +1947,11 @@ class TestHarness:
                     if fnmatch(t.project_name, subproj) and fnmatch(t.name, name):
                         mlog.warning(f'{arg} test name is redundant and was not used')
                         break
-                else:
-                    # If the pattern doesn't match any test,
-                    # report it as an error. We don't want the `test` command to
-                    # succeed on an invalid pattern.
-                    raise MesonException(f'{arg} test name does not match any test')
+                    elif self.options.allow_no_match is not True:
+                        # If the pattern doesn't match any test,
+                        # report it as an error. We don't want the `test` command to
+                        # succeed on an invalid pattern.
+                        raise MesonException(f'{arg} test name does not match any test')
 
     def get_tests(self, errorfile: T.Optional[T.IO] = None) -> T.List[TestSerialisation]:
         if not self.tests:
