@@ -1343,7 +1343,7 @@ class NinjaBackend(backends.Backend):
 
         e.add_item('COMMAND', self.environment.get_build_command() + ['--internal', 'clang_mcdc_coverage'] +
         [   self.environment.get_source_dir(), os.path.join(self.environment.get_source_dir(), self.build.get_subproject_dir()),
-            self.environment.get_build_dir(), self.environment.get_log_dir(), self.environment.get_info_dir(), self.environment.coredata.get_option(OptionKey('clang_mcdc_filter'))])
+            self.environment.get_build_dir(), self.environment.get_log_dir(), self.environment.get_info_dir(), self.environment.coredata.optstore.get_value(OptionKey('clang_mcdc_filter'))])
         e.add_item('DESC', 'Generate Clang MC/DC coverage reports')
         e.add_item('pool', 'console')
         self.add_build(e)
